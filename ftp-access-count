@@ -1,0 +1,67 @@
+#!/usr/bin/env perl
+
+use v5.20;
+
+# get system time
+my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);
+
+my @month = qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
+
+# search at most last 38 days logs (31 + 7)
+chomp (my @logfiles = `find /var/log/nginx/ftp-access.log* -mtime -38`);
+
+my %data;
+my $precise;	# ubuntu-precise (12.04)
+
+for (@logfiles) {
+	if (/\.gz$/) {
+		open(INPUT, "-|", "sudo gunzip -c $_");
+	} else {
+		open(INPUT, "-|", "sudo cat $_");
+	}
+
+	LINE: for (<INPUT>) {
+
+		# manually count ubuntu-precise (12.04)
+		$precise += /precise.+404/;
+
+	# 10.170.26.173 - - [26/Dec/2016:19:36:44 +0800] "GET /archlinux/core/os/x86_64/core.db HTTP/1.1" 200 125714 "-" "pacman/5.0.1 (Linux x86_64) libalpm/10.0.1"
+		if (m%\[\d+?/$month[$mon]/.+?\] "GET (\S+?) \S+?" (200|304|404)%o) {
+			my ($filepath, $state) = ($1, $2 == 404);
+
+			# skip directories
+			# and must include a entry name
+			next LINE unless $filepath =~ m%^/(.+?)/.+[^/]$%;
+			my $entry = $1;
+
+			$data{$entry}[$state]++;
+		}
+	}
+
+	close(INPUT);
+}
+
+say "---";
+say "layout: post";
+printf "title:  \"[%s %d] mirror utilization report\"\n", $month[$mon], $year + 1900;
+printf "date:   %04d-%02d-%02d %02d:%02d:%02d +0800\n", $year + 1900, $mon + 1, $mday, $hour, $min, $sec;
+say "categories: reports";
+say "description: xdlinux.info mirror utilization report, based on ftp access count";
+say "---";
+
+chomp(my @entries = `ls /home/docker/mirror/mirrors`);
+
+my $fmt = "%-20s %16d %16d\n";
+
+say "```";
+printf "%-20s %16s %16s\n", "ENTRY", "SUCCESS", "ERR=404";
+for (@entries) {
+	printf $fmt, $_, $data{$_}[0], $data{$_}[1];
+}
+
+say "# 以上数据过滤了对目录的访问";
+say "# ubuntu precise (12.04 LTS) (未收录在镜像列表里)";
+printf $fmt, "ubuntu precise", 0, $precise;
+
+say "```";
+
