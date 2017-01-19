@@ -3,25 +3,59 @@
 use v5.20;
 
 #
+# Useage: ./ftp-access-count <month> <year>
+#
+
+#
+# config
+#
+my $log_path = "/var/log/nginx/ftp-access.log*";
+my $mirror_path = "/home/docker/mirror/mirrors";
+my $tmp_dir = "/tmp";
+my $title_text = "软件源使用统计";
+my $description = "mirror utilization report, based on ftp access count";
+my $end_mday = 10;
+
+#
 # get current time
 #
 my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);
-my @m= qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
+my @month= qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
 
 #
-# set post title, date, description
+# set post date
 #
-my $title = sprintf('"[%s %d] 软件源使用统计"', $m[$mon], $year + 1900);
 my $date = sprintf('%04d-%02d-%02d %02d:%02d:%02d +0800',
 		$year + 1900, $mon + 1, $mday, $hour, $min, $sec);
-my $description = "mirror utilization report, based on ftp access count";
 
 #
-# search at most last 38 days logs (31 + 7)
-# find entries in sync dir
+# query month year
 #
-chomp(my @logfiles = `find /var/log/nginx/ftp-access.log* -mtime -38`);
-chomp(my @entries = `ls /home/docker/mirror/mirrors`);
+my ($qmon, $qm, $qy);
+$qmon = $ARGV[0] or $qmon = $mon + 1;
+$qy = $ARGV[1] or $qy = $year + 1900;
+$qm = $month[$qmon - 1];
+
+#
+# set post title, description
+#
+my $title = "\"[$qm $qy] $title_text\"";
+
+#
+# search logfiles and entries
+#
+my $start_date = sprintf("%04d-%02d-%02d", $qy, $qmon, 1);
+my $end_date = sprintf("%04d-%02d-%02d", $qy + $qmon / 12, $qmon % 12 + 1, $end_mday);
+
+`touch --date "$start_date" $tmp_dir/start`;
+`touch --date "$end_date" $tmp_dir/end`;
+
+chomp(my @logfiles = `find $log_path -type f -newer /tmp/start -not -newer /tmp/end`);
+
+`rm $tmp_dir/start`;
+`rm $tmp_dir/end`;
+
+chomp(my @entries = `ls $mirror_path`);
 
 #
 # define success and fail states
@@ -31,7 +65,7 @@ my $succ = "200|304";
 my $fail = "404";
 
 #
-# start ftp access count 
+# start ftp access count
 #
 my %data;
 
@@ -50,7 +84,7 @@ for (@logfiles) {
 	# "GET /archlinux/core/os/x86_64/core.db HTTP/1.1" 200 125714\
 	# "-" "pacman/5.0.1 (Linux x86_64) libalpm/10.0.1"
 	#
-		if (m%\[\d+?/$m[$mon]/.+?\] "GET (\S+?) \S+?" ($succ|$fail)%o) {
+		if (m%\[\d+?/$qm/$qy.+\] "GET (\S+?) \S+?" ($succ|$fail)%o) {
 			my ($filepath, $state) = ($1, $2);
 
 			# skip directories
