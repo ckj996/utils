@@ -9,7 +9,7 @@ use v5.20;
 #
 # config
 #
-my $log_path = "/var/log/nginx/ftp-access.log*";
+my $log_path = "/var/log/nginx/mirrors-access.log*";
 my $mirror_path = "/home/docker/mirror/mirrors";
 my $tmp_dir = "/tmp";
 my $title_text = "软件源使用统计";
@@ -47,13 +47,16 @@ my $title = "\"[$qm $qy] $title_text\"";
 my $start_date = sprintf("%04d-%02d-%02d", $qy, $qmon, 1);
 my $end_date = sprintf("%04d-%02d-%02d", $qy + $qmon / 12, $qmon % 12 + 1, $end_mday);
 
-`touch --date "$start_date" $tmp_dir/start`;
-`touch --date "$end_date" $tmp_dir/end`;
+chomp (my $start_file = `mktemp $tmp_dir/start.XXXXXXXX`);
+chomp (my $end_file = `mktemp $tmp_dir/end.XXXXXXXX`);
 
-chomp(my @logfiles = `find $log_path -type f -newer /tmp/start -not -newer /tmp/end`);
+`touch --date "$start_date" $start_file`;
+`touch --date "$end_date" $end_file`;
 
-`rm $tmp_dir/start`;
-`rm $tmp_dir/end`;
+chomp(my @logfiles = `find $log_path -type f -newer $start_file -not -newer $end_file`);
+
+`rm $start_file`;
+`rm $end_file`;
 
 chomp(my @entries = `ls $mirror_path`);
 
@@ -111,10 +114,12 @@ say "categories: reports";
 say "description: $description";
 say "---";
 
+#@entries = sort keys %data;
+
 say "```";
-printf "%-20s %16s %16s\n", "ENTRY", "SUCCESS", "ERR=$fail";
+printf "%-18s %10s %10s\n", "ENTRY", "SUCCESS", "ERR=$fail";
 for (@entries) {
-	printf "%-20s %16d %16d\n", $_, $data{$_}[0], $data{$_}[1];
+	printf "%-18s %10d %10d\n", $_, $data{$_}[0], $data{$_}[1];
 }
 say "```";
 
