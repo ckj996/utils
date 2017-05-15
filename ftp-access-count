@@ -3,123 +3,114 @@
 use v5.20;
 
 #
-# Useage: ./ftp-access-count <month> <year>
+# find logs
 #
+my $logdir = "/var/log/nginx/";
+my $logname = "mirrors-access.log*";
+my $mirrordir = "/srv/www/mirrors/";
+
+my $month = shift @ARGV;
+my $year = shift @ARGV;
+
+chomp($year = `date +%Y`) unless defined $year;
+chomp($month = `date +%m`) unless defined $month;
+
+chomp(my $sdate = `date -d "$year-$month-01" +%Y-%m-%d`);
+chomp(my $edate = `date -d "$year-$month-02 +1 month" +%Y-%m-%d`);
+
+chomp(my $sfile = `mktemp`);
+chomp(my $efile = `mktemp`);
+
+`touch -d "$sdate" $sfile`;
+`touch -d "$edate" $efile`;
+
+chomp(my @logfiles = `find "$logdir" -name "$logname" -type f -newer $sfile ! -newer $efile`);
+
+`rm $sfile`;
+`rm $efile`;
 
 #
-# config
+# parse logs
 #
-my $log_path = "/var/log/nginx/mirrors-access.log*";
-my $mirror_path = "/home/docker/mirror/mirrors";
-my $tmp_dir = "/tmp";
-my $title_text = "软件源使用统计";
-my $description = "mirror utilization report, based on ftp access count";
-my $end_mday = 10;
+chomp(my $month_name = `date -d "$year-$month-01" +%b`);
 
-#
-# get current time
-#
-my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);
-my @month= qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
-
-#
-# set post date
-#
-my $date = sprintf('%04d-%02d-%02d %02d:%02d:%02d +0800',
-		$year + 1900, $mon + 1, $mday, $hour, $min, $sec);
-
-#
-# query month year
-#
-my ($qmon, $qm, $qy);
-$qmon = $ARGV[0] or $qmon = $mon + 1;
-$qy = $ARGV[1] or $qy = $year + 1900;
-$qm = $month[$qmon - 1];
-
-#
-# set post title, description
-#
-my $title = "\"[$qm $qy] $title_text\"";
-
-#
-# search logfiles and entries
-#
-my $start_date = sprintf("%04d-%02d-%02d", $qy, $qmon, 1);
-my $end_date = sprintf("%04d-%02d-%02d", $qy + $qmon / 12, $qmon % 12 + 1, $end_mday);
-
-chomp (my $start_file = `mktemp $tmp_dir/start.XXXXXXXX`);
-chomp (my $end_file = `mktemp $tmp_dir/end.XXXXXXXX`);
-
-`touch --date "$start_date" $start_file`;
-`touch --date "$end_date" $end_file`;
-
-chomp(my @logfiles = `find $log_path -type f -newer $start_file -not -newer $end_file`);
-
-`rm $start_file`;
-`rm $end_file`;
-
-chomp(my @entries = `ls $mirror_path`);
-
-#
-# define success and fail states
-# seperated with |
-#
-my $succ = "200|304";
-my $fail = "404";
-
-#
-# start ftp access count
-#
 my %data;
 
 for (@logfiles) {
 	if (/\.gz$/) {
-		open(INPUT, "-|", "sudo gunzip -c $_");
+		open(INPUT, "-|", "gunzip -c $_");
 	} else {
-		open(INPUT, "-|", "sudo cat $_");
+		open(INPUT, "-|", "cat $_");
 	}
 
 	LINE: for (<INPUT>) {
+		my (
+			$ip,		# 222.25.188.1
+			undef,		# -
+			undef,		# -
+			$time,		# [15/May/2017:06:25:30
+			undef,		# +0800]
+			$request,	# "GET
+			$url,		# /ubuntu/dists/precise/Release.gpg
+			undef,		# HTTP/1.1"
+			$respond,	# 304
+		) = split;
 
-	# log example:
-	#
-	# 10.170.26.173 - - [26/Dec/2016:19:36:44 +0800]\
-	# "GET /archlinux/core/os/x86_64/core.db HTTP/1.1" 200 125714\
-	# "-" "pacman/5.0.1 (Linux x86_64) libalpm/10.0.1"
-	#
-		if (m%\[\d+?/$qm/$qy.+\] "GET (\S+?) \S+?" ($succ|$fail)%o) {
-			my ($filepath, $state) = ($1, $2);
+		next LINE if $request ne '"GET';	# count GET request only
+		next LINE if $url =~ '/$';		# ignore directory
 
-			# skip directories
-			# and must include a entry name
-			next LINE unless $filepath =~ m%^/(.+?)/.+[^/]$%;
-			my $entry = $1;
-			my $stateno = ($state =~ /$fail/o);
+		my (undef, $mm, $yy) = split('[/:]', $time);
 
-			$data{$entry}[$stateno]++;
-		}
+		next LINE if $yy ne $year;
+		next LINE if $mm ne $month_name;
+
+		my (undef, $distro) = split('/', $url);
+
+		$data{$distro}[$respond]++;
 	}
 
 	close(INPUT);
 }
 
 #
-# write out the post
+# write post
 #
+
+chomp(my @distros = `ls $mirrordir`);
+my ($success, $error) = (0, 0);
+
+for my $distro (@distros) {
+	my $dist_ref = $data{$distro};
+	$success += $dist_ref->[200] + $dist_ref->[304];
+	$error += $dist_ref->[404];
+}
+
+my $title = "软件源使用统计";
+chomp(my $date = `date "+%Y-%m-%d %H-%M-%S %z"`);
+
+my $entry_syntax = "%-20s%10d%10d\n";
+my $title_syntax = ($entry_syntax =~ s/d/s/gr);
+
 say "---";
 say "layout: post";
-say "title: $title";
+say "title: \"[$month_name $year] $title\"";
 say "date: $date";
 say "categories: reports";
-say "description: $description";
+say "description: \"SUCCESS: $success; ERROR: $error\"";
 say "---";
 
-#@entries = sort keys %data;
-
 say "```";
-printf "%-18s %10s %10s\n", "ENTRY", "SUCCESS", "ERR=$fail";
-for (@entries) {
-	printf "%-18s %10d %10d\n", $_, $data{$_}[0], $data{$_}[1];
+printf($title_syntax, "ENTRY", "SUCCESS", "ERR=404");
+
+for my $distro (@distros) {
+
+	my $dist_ref = $data{$distro};
+
+	printf($entry_syntax,
+		$distro,
+		$dist_ref->[200] + $dist_ref->[304],	# SUCCESS
+		$dist_ref->[404],			# ERR=404
+	);
+
 }
 say "```";
-
