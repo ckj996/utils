@@ -7,15 +7,20 @@ use v5.20;
 #
 my $logdir = "/var/log/nginx/";
 my $logname = "mirrors-access.log*";
-my $mirrordir = "/srv/www/mirrors/";
+my $mirrordir = "/home/docker/mirror/mirrors/";
 
-my $month = shift @ARGV;
-my $year = shift @ARGV;
+my ($year, $month, $month_name) = split(' ', `date '+%Y %m %b'`);
 
-chomp($year = `date +%Y`) unless defined $year;
-chomp($month = `date +%m`) unless defined $month;
+if ($ARGV[0] eq '--help') {
+	say "usage: $0 [--last-month]";
+	exit;
+}
 
-chomp(my $sdate = `date -d "$year-$month-01" +%Y-%m-%d`);
+if ($ARGV[0] eq '--last-month') {
+	($year, $month, $month_name) = split(' ', `date -d "$year-$month-01 -1 month" '+%Y %m %b'`);
+}
+
+chomp(my $sdate = `date -d "$year-$month-01 -1 day" +%Y-%m-%d`);
 chomp(my $edate = `date -d "$year-$month-02 +1 month" +%Y-%m-%d`);
 
 chomp(my $sfile = `mktemp`);
@@ -32,13 +37,12 @@ chomp(my @logfiles = `find "$logdir" -name "$logname" -type f -newer $sfile ! -n
 #
 # parse logs
 #
-chomp(my $month_name = `date -d "$year-$month-01" +%b`);
 
 my %data;
 
 for (@logfiles) {
 	if (/\.gz$/) {
-		open(INPUT, "-|", "gunzip -c $_");
+		open(INPUT, "-|", "zcat $_");
 	} else {
 		open(INPUT, "-|", "cat $_");
 	}
@@ -86,7 +90,7 @@ for my $distro (@distros) {
 }
 
 my $title = "软件源使用统计";
-chomp(my $date = `date "+%Y-%m-%d %H-%M-%S %z"`);
+chomp(my $date = `date "+%Y-%m-%d %H:%M:%S %z"`);
 
 my $entry_syntax = "%-20s%10d%10d\n";
 my $title_syntax = ($entry_syntax =~ s/d/s/gr);
