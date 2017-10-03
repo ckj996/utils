@@ -13,7 +13,7 @@ class lsJson(object):
         configure
         '''
         self.s_indent_block = arg_indent_block
-        self.__version__ = '3'
+        self.__version__ = '3.1'
 
     def __call__(self, jobj, cdepth=0, show_example=False):
         '''
@@ -21,7 +21,8 @@ class lsJson(object):
         '''
         self.lsjson(jobj, cdepth, show_example)
 
-    def _c(self, s, color):
+    @staticmethod
+    def _c(s, color):
         ''' <helper>
         colorize the given string by wrapping it with ANSI color sequence
         in: s: given string
@@ -48,22 +49,25 @@ class lsJson(object):
             c = ''
         return c+s+restore
 
-    def _type(self, obj):
+    @staticmethod
+    def _type(obj):
         ''' <helper>
         alternative to built-in function type()
         in: obj
         out: string indicating the type of the given object
         '''
         if isinstance(obj, list):
-            return 'list'
+            return 'List'
         elif isinstance(obj, dict):
-            return 'dict'
+            return 'Dict'
+        elif isinstance(obj, bool):
+            return 'Bol'
         elif isinstance(obj, int):
-            return 'int'
+            return 'Int'
         elif isinstance(obj, str):
-            return 'str'
+            return 'Str'
         elif isinstance(obj, float):
-            return 'float'
+            return 'Flt'
         else:
             return str(type(obj))
 
@@ -112,6 +116,10 @@ class lsJson(object):
                 print(self._c(self.s_indent_block*cdepth + '}', 'yellow'))
             else:
                 print(self._c(self.s_indent_block*cdepth + '{}', 'yellow'))
+        elif isinstance(jobj, bool):
+            print(self._c(self.s_indent_block*(9-cdepth)+str(self._type(jobj)), 'blue'))
+            if show_example:
+                print(self._c(self.s_indent_block*(cdepth-1) + '-> '+str(repr(jobj)), 'violet'))
         elif isinstance(jobj, int) or isinstance(jobj, float):
             print(self._c(self.s_indent_block*(9-cdepth)+str(self._type(jobj)), 'green'))
             if show_example:
