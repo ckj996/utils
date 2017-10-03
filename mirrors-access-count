@@ -6,8 +6,8 @@ use v5.20;
 # find logs
 #
 my $logdir = "/var/log/nginx/";
-my $logname = "mirrors-access.log*";
-my $mirrordir = "/srv/www/mirrors/";
+my $logname = "xidian-access.log*";
+my $mirrordir = "/srv/http/mirrors.root/mirrors/";
 
 my ($year, $month, $month_name) = split(' ', `date '+%Y %m %b'`);
 
@@ -55,7 +55,7 @@ for (@logfiles) {
 			$time,		# [15/May/2017:06:25:30
 			undef,		# +0800]
 			$request,	# "GET
-			$url,		# /ubuntu/dists/precise/Release.gpg
+			$url,		# /mirrors/ubuntu/dists/precise/Release.gpg
 			undef,		# HTTP/1.1"
 			$respond,	# 304
 		) = split;
@@ -68,7 +68,9 @@ for (@logfiles) {
 		next LINE if $yy ne $year;
 		next LINE if $mm ne $month_name;
 
-		my (undef, $distro) = split('/', $url);
+		my (undef, $subpath, $distro) = split('/', $url);
+
+		next LINE if $subpath ne 'mirrors';	# skip other subpath
 
 		$data{$distro}[$respond]++;
 	}
