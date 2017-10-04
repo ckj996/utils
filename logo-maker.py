@@ -17,8 +17,8 @@ radius = 240    # radius of main circle
 s_radius_ratio = .850   # ratio to radius
 s_corner_ratio = .224   # ratio to radius
 s_width_ratio = .092    # ratio to radius
-s_color = "#212121"
-bg_color = "#FAFAFA"
+s_color = "#000000"
+bg_color = "#FFFFFF"
 petal_colors = (
     "#F44336",  # 1 o'clock
     "#FF9800",  # 3 o'clock
