@@ -11,7 +11,7 @@ COMMIT="mirrors-access-count"
 
 rm -rf $REPO
 git clone $REMOTE $REPO
-mirrors-access-count --lastmonth > $REPO/_posts/$FILE
+mirrors-access-count --last-month > $REPO/_posts/$FILE
 git -C $REPO add --all
 git -C $REPO commit -m $COMMIT
 git -C $REPO push --force
