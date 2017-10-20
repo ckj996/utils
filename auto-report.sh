@@ -7,7 +7,7 @@ REMOTE="gogs@linux.xidian.edu.cn:xdlinux/xdosc-posts.git"
 REPO=/home/bot/xdosc-posts
 DATE=`date +%Y-%m-%d`
 FILE=${DATE}-mirrors-access-count.md
-COMMIT="automatic mirrors-access-count"
+COMMIT="mirrors-access-count"
 
 rm -rf $REPO
 git clone $REMOTE $REPO
